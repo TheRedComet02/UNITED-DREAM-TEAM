@@ -64,10 +64,13 @@ export default function App() {
 
       if (!response.ok) {
         let serverErrorMsg = "";
+        const rawText = await response.text();
         try {
-          const errData = await response.json();
+          const errData = JSON.parse(rawText);
           serverErrorMsg = errData?.error || errData?.message || "";
-        } catch (_) {}
+        } catch (_) {
+          serverErrorMsg = rawText || `HTTP ${response.status}: ${response.statusText}`;
+        }
         throw new Error(serverErrorMsg || "The scout was unable to process your request. Please try again.");
       }
 
@@ -96,7 +99,7 @@ export default function App() {
             <motion.img
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              src="https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Manchester_United_FC_crest.svg/1200px-Manchester_United_FC_crest.svg.png"
+              src="https://logodownload.org/wp-content/uploads/2015/05/manchester-united-logo.png"
               alt="MUFC"
               referrerPolicy="no-referrer"
               className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-[0_0_15px_rgba(218,41,28,0.3)]"
@@ -280,7 +283,7 @@ export default function App() {
               className="flex flex-col items-center py-24 opacity-30 filter grayscale hover:grayscale-0 transition-all duration-700"
             >
               <img 
-                src="https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Manchester_United_FC_crest.svg/1200px-Manchester_United_FC_crest.svg.png" 
+                src="https://logodownload.org/wp-content/uploads/2015/05/manchester-united-logo.png" 
                 alt="Manchester United Crest" 
                 referrerPolicy="no-referrer"
                 className="w-32 h-32 mb-8 select-none pointer-events-none"
