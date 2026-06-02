@@ -1,0 +1,6 @@
+{
+  "name": "The United Scout",
+  "description": "Tactical intelligence engine for Manchester United Rebuild Managers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
