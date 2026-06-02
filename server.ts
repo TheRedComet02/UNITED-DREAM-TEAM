@@ -12,14 +12,21 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
+// Lazy initialize GoogleGenAI inside the request handler or on-demand
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY environment variable is not defined. Please add your key in the Settings > Secrets/Environment panel.");
   }
-});
+  return new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+}
 
 // System Instruction for The United Scout
 const SYSTEM_INSTRUCTION = `You are 'The United Scout'—the core tactical intelligence engine for a Manchester United Rebuild Manager application. Your role is to act as an elite Director of Football and Chief Scout.
@@ -73,63 +80,84 @@ app.post("/api/scout", async (req, res) => {
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            tactical_analysis: { type: Type.STRING },
-            current_formation: { type: Type.STRING },
-            lineup_analysis: {
+    const ai = getGeminiClient();
+    const modelsToTry = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-flash-latest"];
+    let response = null;
+    let lastError: any = null;
+
+    for (const model of modelsToTry) {
+      try {
+        console.log(`Analyzing tactical request using Gemini model: ${model}`);
+        response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseSchema: {
               type: Type.OBJECT,
               properties: {
-                current_weakness: { type: Type.STRING },
-                suggested_tactical_shift: { type: Type.STRING }
-              },
-              required: ["current_weakness", "suggested_tactical_shift"]
-            },
-            recommended_targets: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  player_name: { type: Type.STRING },
-                  current_club: { type: Type.STRING },
-                  age: { type: Type.INTEGER },
-                  estimated_cost: { type: Type.STRING },
-                  why_they_fit: { type: Type.STRING },
-                  key_stat: { type: Type.STRING },
-                  biodata: {
+                tactical_analysis: { type: Type.STRING },
+                current_formation: { type: Type.STRING },
+                lineup_analysis: {
+                  type: Type.OBJECT,
+                  properties: {
+                    current_weakness: { type: Type.STRING },
+                    suggested_tactical_shift: { type: Type.STRING }
+                  },
+                  required: ["current_weakness", "suggested_tactical_shift"]
+                },
+                recommended_targets: {
+                  type: Type.ARRAY,
+                  items: {
                     type: Type.OBJECT,
                     properties: {
-                      nationality: { type: Type.STRING },
-                      position: { type: Type.STRING },
-                      height: { type: Type.STRING },
-                      preferred_foot: { type: Type.STRING },
-                      market_value: { type: Type.STRING },
-                      strengths: { type: Type.ARRAY, items: { type: Type.STRING } }
+                      player_name: { type: Type.STRING },
+                      current_club: { type: Type.STRING },
+                      age: { type: Type.INTEGER },
+                      estimated_cost: { type: Type.STRING },
+                      why_they_fit: { type: Type.STRING },
+                      key_stat: { type: Type.STRING },
+                      biodata: {
+                        type: Type.OBJECT,
+                        properties: {
+                          nationality: { type: Type.STRING },
+                          position: { type: Type.STRING },
+                          height: { type: Type.STRING },
+                          preferred_foot: { type: Type.STRING },
+                          market_value: { type: Type.STRING },
+                          strengths: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ["nationality", "position", "height", "preferred_foot", "market_value", "strengths"]
+                      }
                     },
-                    required: ["nationality", "position", "height", "preferred_foot", "market_value", "strengths"]
+                    required: ["player_name", "current_club", "age", "estimated_cost", "why_they_fit", "key_stat", "biodata"]
                   }
-                },
-                required: ["player_name", "current_club", "age", "estimated_cost", "why_they_fit", "key_stat", "biodata"]
-              }
+                }
+              },
+              required: ["tactical_analysis", "current_formation", "lineup_analysis", "recommended_targets"]
             }
           },
-          required: ["tactical_analysis", "current_formation", "lineup_analysis", "recommended_targets"]
+        });
+        if (response && response.text) {
+          console.log(`Successfully generated scout report using model: ${model}`);
+          break;
         }
-      },
-    });
+      } catch (err: any) {
+        console.warn(`Model ${model} failed: ${err.message || err}`);
+        lastError = err;
+      }
+    }
+
+    if (!response || !response.text) {
+      throw new Error(lastError?.message || "All tactical models failed to respond. Please check your credentials or network.");
+    }
 
     const result = JSON.parse(response.text || "{}");
     res.json(result);
   } catch (error: any) {
     console.error("Scout Error:", error);
-    res.status(500).json({ error: "Failed to generate scout report: " + error.message });
+    res.status(500).json({ error: error.message || "Failed to generate scout report" });
   }
 });
 

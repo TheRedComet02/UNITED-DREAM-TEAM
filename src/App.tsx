@@ -63,7 +63,12 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error("The scout was unable to process your request.");
+        let serverErrorMsg = "";
+        try {
+          const errData = await response.json();
+          serverErrorMsg = errData?.error || errData?.message || "";
+        } catch (_) {}
+        throw new Error(serverErrorMsg || "The scout was unable to process your request. Please try again.");
       }
 
       const data = await response.json();
